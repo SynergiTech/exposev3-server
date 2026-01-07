@@ -1,4 +1,4 @@
-FROM php:8.1-cli
+FROM php:8.2.30-cli
 
 RUN apt-get update
 RUN apt-get install -y git libzip-dev zip
@@ -12,7 +12,7 @@ COPY . /src
 WORKDIR /src
 
 # install the dependencies
-RUN composer install -o --prefer-dist && chmod a+x expose
+RUN composer install -o --prefer-dist --no-dev && chmod a+x expose-server
 
 ENV port=8080
 ENV domain=localhost

@@ -1,7 +1,9 @@
-version: "3.7"
 services:
   expose:
-    image: beyondcodegmbh/expose-server:latest
+    # image: beyondcodegmbh/expose-server:latest
+    build:
+      context: ./
+      dockerfile: Dockerfile
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
