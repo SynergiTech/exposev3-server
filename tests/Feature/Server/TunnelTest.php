@@ -79,6 +79,171 @@ class TunnelTest extends TestCase
     }
 
     /** @test */
+    public function it_returns_default_404_pages_for_custom_domains_when_no_custom_error_page_is_specified()
+    {
+        $this->app['config']['expose-server.validate_auth_tokens'] = true;
+
+        $user = $this->createUser([
+            'name' => 'Marcel',
+            'can_specify_domains' => 1,
+        ]);
+
+        $this->await($this->browser->post('http://127.0.0.1:8080/api/domains', [
+            'Host' => 'expose.localhost',
+            'Authorization' => base64_encode('username:secret'),
+            'Content-Type' => 'application/json',
+        ], json_encode([
+            'domain' => 'share.beyondco.de',
+            'auth_token' => $user->auth_token,
+        ])));
+
+        try {
+            $this->await($this->browser->get('http://127.0.0.1:8080/', [
+                'Host' => 'tunnel.share.beyondco.de',
+            ]));
+        } catch (ResponseException $e) {
+            $response = $e->getResponse();
+
+            $this->assertStringContainsString('<title>Expose</title>', $response->getBody()->getContents());
+        }
+    }
+
+    /** @test */
+    public function it_returns_custom_404_pages_for_custom_domains_when_specified()
+    {
+        $this->app['config']['expose-server.validate_auth_tokens'] = true;
+
+        $user = $this->createUser([
+            'name' => 'Marcel',
+            'can_specify_domains' => 1,
+        ]);
+
+        $this->await($this->browser->post('http://127.0.0.1:8080/api/domains', [
+            'Host' => 'expose.localhost',
+            'Authorization' => base64_encode('username:secret'),
+            'Content-Type' => 'application/json',
+        ], json_encode([
+            'domain' => 'share.beyondco.de',
+            'error_page' => '<h1>Custom 404 for %%subdomain%%</h1>',
+            'auth_token' => $user->auth_token,
+        ])));
+
+        try {
+            $this->await($this->browser->get('http://127.0.0.1:8080/', [
+                'Host' => 'tunnel.share.beyondco.de',
+            ]));
+        } catch (ResponseException $e) {
+            $response = $e->getResponse();
+
+            $this->assertStringContainsString('<h1>Custom 404 for tunnel</h1>', $response->getBody()->getContents());
+        }
+    }
+
+    /** @test */
+    public function it_can_update_404_pages_for_custom_domains()
+    {
+        $this->app['config']['expose-server.validate_auth_tokens'] = true;
+
+        $user = $this->createUser([
+            'name' => 'Marcel',
+            'can_specify_domains' => 1,
+        ]);
+
+        $domainResponse = $this->await($this->browser->post('http://127.0.0.1:8080/api/domains', [
+            'Host' => 'expose.localhost',
+            'Authorization' => base64_encode('username:secret'),
+            'Content-Type' => 'application/json',
+        ], json_encode([
+            'domain' => 'share.beyondco.de',
+            'auth_token' => $user->auth_token,
+        ])));
+
+        $domain = json_decode($domainResponse->getBody()->getContents())->domain;
+
+        $this->await($this->browser->put('http://127.0.0.1:8080/api/domains/'.$domain->id, [
+            'Host' => 'expose.localhost',
+            'Authorization' => base64_encode('username:secret'),
+            'Content-Type' => 'application/json',
+        ], json_encode([
+            'domain' => 'share.beyondco.de',
+            'error_page' => '<h1>Custom 404 for %%subdomain%%</h1>',
+            'auth_token' => $user->auth_token,
+        ])));
+
+        try {
+            $this->await($this->browser->get('http://127.0.0.1:8080/', [
+                'Host' => 'tunnel.share.beyondco.de',
+            ]));
+        } catch (ResponseException $e) {
+            $response = $e->getResponse();
+
+            $this->assertStringContainsString('<h1>Custom 404 for tunnel</h1>', $response->getBody()->getContents());
+        }
+    }
+
+    /** @test */
+    public function it_refuses_certificate_issuance_for_a_host_without_an_active_tunnel()
+    {
+        $this->expectException(ResponseException::class);
+        $this->expectExceptionMessage(404);
+
+        $this->await($this->browser->get('http://127.0.0.1:8080/expose/can-issue-certificate?domain=tunnel.localhost', [
+            'Host' => '127.0.0.1:8080',
+        ]));
+    }
+
+    /** @test */
+    public function it_allows_certificate_issuance_for_a_host_with_an_active_tunnel()
+    {
+        $this->app['config']['expose-server.validate_auth_tokens'] = false;
+
+        $this->createTestHttpServer();
+
+        $client = $this->createClient();
+        $this->await($client->connectToServer('127.0.0.1:8085', 'tunnel'));
+
+        $response = $this->await($this->browser->get('http://127.0.0.1:8080/expose/can-issue-certificate?domain=tunnel.localhost', [
+            'Host' => '127.0.0.1:8080',
+        ]));
+
+        $this->assertSame(200, $response->getStatusCode());
+    }
+
+    /** @test */
+    public function it_allows_certificate_issuance_for_the_server_host()
+    {
+        // The bare server hostname is not tunnel-backed (the wildcard cert
+        // covers *.host but not the host itself) and must always be allowed.
+        $response = $this->await($this->browser->get('http://127.0.0.1:8080/expose/can-issue-certificate?domain=localhost', [
+            'Host' => '127.0.0.1:8080',
+        ]));
+
+        $this->assertSame(200, $response->getStatusCode());
+    }
+
+    /** @test */
+    public function it_allows_certificate_issuance_for_the_admin_subdomain()
+    {
+        $response = $this->await($this->browser->get('http://127.0.0.1:8080/expose/can-issue-certificate?domain=expose.localhost', [
+            'Host' => '127.0.0.1:8080',
+        ]));
+
+        $this->assertSame(200, $response->getStatusCode());
+    }
+
+    /** @test */
+    public function it_allows_certificate_issuance_for_configured_always_allow_hosts()
+    {
+        $this->app['config']['expose-server.on_demand_tls.always_allow_hosts'] = ['status.example.com'];
+
+        $response = $this->await($this->browser->get('http://127.0.0.1:8080/expose/can-issue-certificate?domain=status.example.com', [
+            'Host' => '127.0.0.1:8080',
+        ]));
+
+        $this->assertSame(200, $response->getStatusCode());
+    }
+
+    /** @test */
     public function it_sends_incoming_requests_to_the_connected_client()
     {
         $this->app['config']['expose-server.validate_auth_tokens'] = false;

@@ -32,6 +32,8 @@ use Expose\Server\Http\Controllers\Admin\StoreDomainController;
 use Expose\Server\Http\Controllers\Admin\StoreSettingsController;
 use Expose\Server\Http\Controllers\Admin\StoreSubdomainController;
 use Expose\Server\Http\Controllers\Admin\StoreUsersController;
+use Expose\Server\Http\Controllers\Admin\UpdateDomainController;
+use Expose\Server\Http\Controllers\CanIssueCertificateController;
 use Expose\Server\Http\Controllers\ControlMessageController;
 use Expose\Server\Http\Controllers\HealthController;
 use Expose\Server\Http\Controllers\TunnelMessageController;
@@ -136,6 +138,17 @@ class Factory
         return $wsServer;
     }
 
+    protected function addCertificateAuthorizationRoute()
+    {
+        // Caddy's on-demand TLS asks this endpoint before issuing a certificate.
+        // Gated to the loopback interface so it can only be reached by the local
+        // Caddy process - this keeps it from shadowing a tunnelled app's path and
+        // from leaking which tunnels are live to external callers.
+        $loopbackCondition = 'request.headers.get("Host") in ["127.0.0.1", "127.0.0.1:'.$this->port.'"]';
+
+        $this->router->get('/expose/can-issue-certificate', CanIssueCertificateController::class, $loopbackCondition);
+    }
+
     protected function addAdminRoutes()
     {
         $adminCondition = 'request.headers.get("Host") matches "/^'.config('expose-server.subdomain').'\\\\./i"';
@@ -160,6 +173,7 @@ class Factory
         $this->router->get('/api/logs/{subdomain}', GetLogsForSubdomainController::class, $adminCondition);
 
         $this->router->post('/api/domains', StoreDomainController::class, $adminCondition);
+        $this->router->put('/api/domains/{id}', UpdateDomainController::class, $adminCondition);
         $this->router->delete('/api/domains/{domain}', DeleteSubdomainController::class, $adminCondition);
 
         $this->router->post('/api/subdomains', StoreSubdomainController::class, $adminCondition);
@@ -216,6 +230,8 @@ class Factory
             ->addAdminRoutes();
 
         $controlConnection = $this->addControlConnectionRoute();
+
+        $this->addCertificateAuthorizationRoute();
 
         $this->addTunnelRoute();
 
