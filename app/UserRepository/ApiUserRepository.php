@@ -202,14 +202,14 @@ class ApiUserRepository implements UserRepository
     public function updateLastSharedAt($id): PromiseInterface
     {
         return new Promise(function (callable $resolve, callable $reject) {
-            $resolve();
+            $resolve(null);
         });
     }
 
     public function setCooldownForToken(string $authToken, int $cooldownEndsAt): PromiseInterface
     {
         return new Promise(function (callable $resolve, callable $reject) {
-            $resolve();
+            $resolve(null);
         });
     }
 }
