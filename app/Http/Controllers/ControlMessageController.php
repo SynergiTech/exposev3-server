@@ -134,6 +134,10 @@ class ControlMessageController implements MessageComponentInterface
                 return $user;
             })
             ->then(function ($user) use ($connection, $data) {
+                if ($data->type === 'lookup') {
+                    return $this->handleLookupConnection($connection, $user);
+                }
+
                 if ($data->type === 'http') {
                     $this->handleHttpConnection($connection, $data, $user);
                 } elseif ($data->type === 'tcp') {
@@ -173,6 +177,20 @@ class ControlMessageController implements MessageComponentInterface
         }
 
         return $deferred->promise();
+    }
+
+    protected function handleLookupConnection(ConnectionInterface $connection, ?array $user)
+    {
+        $connection->send(json_encode([
+            'event' => 'authenticated',
+            'data' => [
+                'message' => '',
+                'user' => $user,
+                'client_id' => uniqid(),
+            ],
+        ]));
+
+        $connection->close();
     }
 
     protected function handleHttpConnection(ConnectionInterface $connection, $data, $user = null)

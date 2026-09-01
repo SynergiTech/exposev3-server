@@ -211,6 +211,14 @@ return [
 
         'maximum_connection_length_reached' => 'You have reached the maximum connection length for this server. Please upgrade to Expose Pro for unlimited connection length.',
         'connection_cooldown_active' => 'You\'ve used your free session for now. Please wait :cooldown minutes before reconnecting, or upgrade to Expose Pro → https://expose.dev/pro',
+
+        'maximum_connection_count' => 'You have reached the maximum number of open connections for your user. Please close some connections before trying again.',
+
+        'tcp_port_sharing_disabled' => 'TCP port sharing is not available on this Expose server.',
+
+        'tcp_port_sharing_unauthorized' => 'You are not allowed to share TCP ports. Please upgrade to Expose Pro.',
+
+        'no_free_tcp_port_available' => 'There are no free TCP ports available on this server. Please try again later.',
     ],
 
     'statistics' => [

@@ -760,6 +760,81 @@ class TunnelTest extends TestCase
     }
 
     /** @test */
+    public function it_returns_the_authenticated_user_for_lookup_connections_without_allowing_tcp_port_sharing()
+    {
+        $this->app['config']['expose-server.validate_auth_tokens'] = true;
+        $this->app['config']['expose-server.allow_tcp_port_sharing'] = false;
+
+        $user = $this->createUser([
+            'name' => 'Marcel',
+            'can_share_tcp_ports' => 0,
+        ]);
+
+        $deferred = new \React\Promise\Deferred();
+
+        \Ratchet\Client\connect('ws://127.0.0.1:8080/expose/control?authToken='.$user->auth_token.'&version=test', [], [
+            'X-Expose-Control' => 'enabled',
+        ], $this->loop)->then(function (\Ratchet\Client\WebSocket $conn) use ($deferred) {
+            $conn->on('message', function ($message) use ($conn, $deferred) {
+                $deferred->resolve(json_decode($message));
+                $conn->close();
+            });
+
+            $conn->send(json_encode([
+                'event' => 'authenticate',
+                'data' => [
+                    'type' => 'lookup',
+                ],
+            ]));
+        }, function (\Exception $e) use ($deferred) {
+            $deferred->reject($e);
+        });
+
+        $response = $this->await($deferred->promise());
+
+        $this->assertSame('authenticated', $response->event);
+        $this->assertSame('Marcel', $response->data->user->name);
+    }
+
+    /** @test */
+    public function it_sends_an_error_message_when_rejecting_authentication()
+    {
+        $this->app['config']['expose-server.validate_auth_tokens'] = true;
+        $this->app['config']['expose-server.allow_tcp_port_sharing'] = false;
+
+        $user = $this->createUser([
+            'name' => 'Marcel',
+            'can_share_tcp_ports' => 1,
+        ]);
+
+        $deferred = new \React\Promise\Deferred();
+
+        \Ratchet\Client\connect('ws://127.0.0.1:8080/expose/control?authToken='.$user->auth_token.'&version=test', [], [
+            'X-Expose-Control' => 'enabled',
+        ], $this->loop)->then(function (\Ratchet\Client\WebSocket $conn) use ($deferred) {
+            $conn->on('message', function ($message) use ($conn, $deferred) {
+                $deferred->resolve(json_decode($message));
+                $conn->close();
+            });
+
+            $conn->send(json_encode([
+                'event' => 'authenticate',
+                'data' => [
+                    'type' => 'tcp',
+                    'port' => 8080,
+                ],
+            ]));
+        }, function (\Exception $e) use ($deferred) {
+            $deferred->reject($e);
+        });
+
+        $response = $this->await($deferred->promise());
+
+        $this->assertSame('authenticationFailed', $response->event);
+        $this->assertNotNull($response->data->message);
+    }
+
+    /** @test */
     public function it_rejects_clients_that_are_in_cooldown()
     {
         $this->app['config']['expose-server.validate_auth_tokens'] = true;
